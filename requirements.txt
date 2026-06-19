@@ -4,3 +4,4 @@ numpy
 schedule
 pytz
 yfinance
+ta
