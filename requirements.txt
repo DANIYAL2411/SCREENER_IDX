@@ -1,0 +1,6 @@
+requests
+pandas
+numpy
+schedule
+pytz
+tradingview-screener
