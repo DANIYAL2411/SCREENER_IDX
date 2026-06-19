@@ -7,43 +7,62 @@ from ta.momentum import RSIIndicator
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={
-        "chat_id": CHAT_ID,
-        "text": message
-    })
+
+    r = requests.post(
+        url,
+        data={
+            "chat_id": CHAT_ID,
+            "text": message
+        }
+    )
+
+    print(r.status_code)
+    print(r.text)
+
 
 def load_symbols():
     with open("symbols.txt", "r") as f:
         return [line.strip() for line in f if line.strip()]
 
+
 def scan_stock(symbol):
     try:
+        print(f"Scanning {symbol}")
+
         df = yf.download(
             symbol,
             period="6mo",
             interval="1d",
-            progress=False,
-            auto_adjust=True
+            auto_adjust=True,
+            progress=False
         )
 
-        if len(df) < 60:
+        if df.empty:
+            print(f"{symbol} no data")
             return None
 
-        close = df["Close"]
+        if len(df) < 60:
+            print(f"{symbol} insufficient data")
+            return None
+
+        close = df["Close"].squeeze()
+
+        if len(close) < 60:
+            return None
 
         ema5 = close.ewm(span=5).mean().iloc[-1]
         ema20 = close.ewm(span=20).mean().iloc[-1]
         ema50 = close.ewm(span=50).mean().iloc[-1]
 
-        rsi = RSIIndicator(close.squeeze(), window=14).rsi().iloc[-1]
+        rsi = RSIIndicator(close, window=14).rsi().iloc[-1]
 
         last_close = float(close.iloc[-1])
 
         if (
-            last_close > 50
-            and last_close < 6000
+            50 < last_close < 6000
             and ema5 > ema20 > ema50
             and rsi > 60
         ):
@@ -74,9 +93,10 @@ Trend : EMA5 > EMA20 > EMA50
 """
 
     except Exception as e:
-        print(symbol, e)
+        print(f"ERROR {symbol}: {e}")
 
     return None
+
 
 def main():
     symbols = load_symbols()
@@ -90,7 +110,10 @@ def main():
             send_telegram(signal)
             found += 1
 
-    send_telegram(f"✅ Scan selesai\nSignal ditemukan: {found}")
+    send_telegram(
+        f"✅ Scan selesai\nSignal ditemukan: {found}"
+    )
+
 
 if __name__ == "__main__":
     main()
