@@ -3,4 +3,4 @@ pandas
 numpy
 schedule
 pytz
-tradingview-screener
+yfinance
