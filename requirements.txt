@@ -1,9 +1,5 @@
 requests
 pandas
 numpy
-schedule
-pytz
 yfinance
 ta
-beautifulsoup4
-lxml
