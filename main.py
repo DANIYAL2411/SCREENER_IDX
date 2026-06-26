@@ -1,28 +1,34 @@
 import os
-import requests
-import pandas as pd
-import yfinance as yf
-from ta.momentum import RSIIndicator
 import time
 from datetime import datetime
 
+import requests
+import yfinance as yf
+from ta.momentum import RSIIndicator
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+
+# Menyimpan status sinyal terakhir tiap saham
+signal_state = {}
 
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
-    r = requests.post(
-        url,
-        data={
-            "chat_id": CHAT_ID,
-            "text": message
-        }
-    )
+    try:
+        r = requests.post(
+            url,
+            data={
+                "chat_id": CHAT_ID,
+                "text": message
+            },
+            timeout=30
+        )
+        print(f"Telegram: {r.status_code}")
 
-    print(r.status_code)
-    print(r.text)
+    except Exception as e:
+        print(f"Telegram Error: {e}")
 
 
 def load_symbols():
@@ -42,18 +48,10 @@ def scan_stock(symbol):
             progress=False
         )
 
-        if df.empty:
-            print(f"{symbol} no data")
-            return None
-
-        if len(df) < 60:
-            print(f"{symbol} insufficient data")
+        if df.empty or len(df) < 60:
             return None
 
         close = df["Close"].squeeze()
-
-        if len(close) < 60:
-            return None
 
         ema5 = close.ewm(span=5).mean().iloc[-1]
         ema20 = close.ewm(span=20).mean().iloc[-1]
@@ -64,7 +62,7 @@ def scan_stock(symbol):
         last_close = float(close.iloc[-1])
 
         if (
-            50 < last_close < 6000
+            60 < last_close < 8000
             and ema5 > ema20 > ema50
             and rsi > 60
         ):
@@ -73,26 +71,24 @@ def scan_stock(symbol):
             entry_high = round(last_close * 1.005)
 
             sl = round(last_close * 0.96)
-            tp1 = round(last_close * 1.08)
+            tp1 = round(last_close * 1.05)
             tp2 = round(last_close * 1.12)
 
-            return f"""
-🔥 DAYTRADE SIGNAL
+            return f"""🔥 DAYTRADE SIGNAL
 
 Kode : {symbol.replace('.JK','')}
 Harga : {round(last_close)}
 
 ✅ Entry : {entry_low} - {entry_high}
 
-🎯 TP1 : {tp1} (+8%)
+🎯 TP1 : {tp1} (+5%)
 🎯 TP2 : {tp2} (+12%)
 
 🛑 SL : {sl} (-4%)
 
 ⚡ RSI : {round(rsi,1)}
 
-Trend : EMA5 > EMA20 > EMA50
-"""
+Trend : EMA5 > EMA20 > EMA50"""
 
     except Exception as e:
         print(f"ERROR {symbol}: {e}")
@@ -101,37 +97,55 @@ Trend : EMA5 > EMA20 > EMA50
 
 
 def main():
+    global signal_state
+
     symbols = load_symbols()
 
-    found = 0
+    active_signal = 0
+    new_signal = 0
 
     for symbol in symbols:
+
         signal = scan_stock(symbol)
 
-        if signal:
-            send_telegram(signal)
-            found += 1
+        current = signal is not None
+        previous = signal_state.get(symbol, False)
 
-    send_telegram(
-        f"✅ Scan selesai\nSignal ditemukan: {found}"
-    )
+        if current:
+            active_signal += 1
+
+        # Kirim hanya jika sinyal baru muncul
+        if current and not previous:
+            send_telegram(signal)
+            new_signal += 1
+            print(f"NEW SIGNAL -> {symbol}")
+
+        # Update status
+        signal_state[symbol] = current
+
+    print("=" * 60)
+    print(f"Total Saham     : {len(symbols)}")
+    print(f"Signal Aktif    : {active_signal}")
+    print(f"Signal Baru     : {new_signal}")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
 
-    INTERVAL = 300   # 300 detik = 5 menit
+    INTERVAL = 300  # 5 menit
 
     while True:
+
         try:
-            print("=" * 50)
-            print(f"SCAN : {datetime.now()}")
+            print()
+            print("=" * 60)
+            print(f"SCAN : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print("=" * 60)
 
             main()
-
-            print("Scan selesai.")
 
         except Exception as e:
             print(f"MAIN ERROR: {e}")
 
-        print(f"Menunggu {INTERVAL} detik...")
+        print(f"Sleep {INTERVAL} seconds...\n")
         time.sleep(INTERVAL)
