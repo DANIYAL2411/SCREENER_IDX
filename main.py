@@ -3,6 +3,8 @@ import requests
 import pandas as pd
 import yfinance as yf
 from ta.momentum import RSIIndicator
+import time
+from datetime import datetime
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
@@ -116,4 +118,20 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+
+    INTERVAL = 300   # 300 detik = 5 menit
+
+    while True:
+        try:
+            print("=" * 50)
+            print(f"SCAN : {datetime.now()}")
+
+            main()
+
+            print("Scan selesai.")
+
+        except Exception as e:
+            print(f"MAIN ERROR: {e}")
+
+        print(f"Menunggu {INTERVAL} detik...")
+        time.sleep(INTERVAL)
